@@ -1,26 +1,23 @@
-@file:Suppress("UnstableApiUsage")
-
 import com.android.build.gradle.tasks.BundleAar
 import org.jetbrains.kotlin.config.KotlinCompilerVersion
 import org.gradle.api.publish.maven.MavenPublication
-import org.gradle.api.tasks.bundling.Jar
 import org.gradle.kotlin.dsl.support.uppercaseFirstChar
-import java.util.*
 
 plugins {
     id("com.android.library")
+    id("kotlin-android")
     id("maven-publish")
     id("signing")
-    id("kotlin-android")
 }
-
-group = "io.maryk.rocksdb"
-version = "8.8.1"
 
 android {
     namespace = "org.rocksdb"
-    compileSdk = 33
+    compileSdk = 34
+    buildToolsVersion = 34.toString()
     defaultConfig {
+        aarMetadata {
+            minCompileSdk = 21
+        }
         minSdk = 21
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
@@ -51,12 +48,15 @@ android {
     externalNativeBuild {
         cmake {
             path = File("$projectDir/../rocksdb/CMakeLists.txt")
-            version = "3.19.1"
+            version = "3.22.1"
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_11.toString()
     }
     sourceSets {
         this["main"].run {
@@ -66,9 +66,21 @@ android {
             java.srcDirs("src/androidTest/kotlin")
         }
     }
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+    publishing {
+        singleVariant("release") {
+            // if you don't want sources/javadoc, remove these lines
+            withSourcesJar()
+            withJavadocJar()
+        }
+    }
 }
 
-val sourcesJar by tasks.creating(Jar::class) {
+/*val sourcesJar by tasks.creating(Jar::class) {
     archiveClassifier.set("sources")
     from(android.sourceSets["main"].java.srcDirs)
 }
@@ -86,16 +98,16 @@ val javadocJar by tasks.creating(Jar::class) {
 artifacts {
     archives(sourcesJar)
     archives(javadocJar)
-}
+}*/
 
 dependencies {
     implementation("io.maryk.lz4:lz4-android:1.9.4")
     androidTestImplementation(kotlin("stdlib-jdk8", KotlinCompilerVersion.VERSION))
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }
 
 // Stub secrets to let the project sync and build without the publication values set up
-ext["signing.keyId"] = null
+/*ext["signing.keyId"] = null
 ext["signing.password"] = null
 ext["signing.secretKeyRingFile"] = null
 ext["ossrhUsername"] = null
@@ -119,7 +131,8 @@ if (secretPropsFile.exists()) {
     ext["ossrhPassword"] = System.getenv("OSSRH_PASSWORD")
 }
 
-fun getExtraString(name: String) = ext[name]?.toString()
+fun getExtraString(name: String) = ext[name]?.toString()*/
+val String.byProperty: String? get() = findProperty(this) as? String
 
 afterEvaluate {
     val publishTasks = mutableListOf<BundleAar>()
@@ -145,17 +158,24 @@ afterEvaluate {
     publishing {
         repositories {
             maven {
-                name = "sonatype"
-                setUrl("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
                 credentials {
-                    username = getExtraString("ossrhUsername")
-                    password = getExtraString("ossrhPassword")
+                    username = "nexusUser".byProperty
+                    password = "nexusPassword".byProperty
                 }
+                setUrl("https://nexus.harbortouch.com/repository/shift4-m2/")
             }
         }
-
         publications {
-            register<MavenPublication>("RocksDB-Android").configure {
+            register<MavenPublication>("release") {
+                from(components["release"])
+                //artifact(sourcesJar)
+                //artifact(javadocJar)
+                //publishTasks.forEach(::artifact)
+                groupId = project.group as String
+                artifactId = "rocksdb-android"
+                version = project.version as String
+            }
+            /*register<MavenPublication>("RocksDB-Android").configure {
                 artifact(sourcesJar)
                 artifact(javadocJar)
                 publishTasks.forEach(::artifact)
@@ -176,14 +196,14 @@ afterEvaluate {
                         }
                     }
                 }
-            }
+            }*/
         }
 
-        publications.withType<MavenPublication> {
+        /*publications.withType<MavenPublication> {
             pom {
                 name.set(project.name)
                 description.set("Android RocksDB library")
-                url.set("https://github.com/marykdb/rocksdb-android")
+                url.set("https://github.com/palaima/rocksdb-android")
 
                 licenses {
                     license {
@@ -199,13 +219,13 @@ afterEvaluate {
                     }
                 }
                 scm {
-                    url.set("https://github.com/marykdb/rocksdb-android.git")
+                    url.set("https://github.com/palaima/rocksdb-android.git")
                 }
             }
-        }
+        }*/
     }
 
-    signing {
+    /*signing {
         sign(publishing.publications)
-    }
+    }*/
 }
