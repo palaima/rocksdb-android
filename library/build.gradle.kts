@@ -1,4 +1,5 @@
 import com.android.build.gradle.tasks.BundleAar
+import com.android.tools.r8.internal.so
 import org.jetbrains.kotlin.config.KotlinCompilerVersion
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.kotlin.dsl.support.uppercaseFirstChar
@@ -74,13 +75,13 @@ android {
     publishing {
         singleVariant("release") {
             // if you don't want sources/javadoc, remove these lines
-            withSourcesJar()
-            withJavadocJar()
+            //withSourcesJar()
+            //withJavadocJar()
         }
     }
 }
 
-/*val sourcesJar by tasks.creating(Jar::class) {
+val sourcesJar by tasks.creating(Jar::class) {
     archiveClassifier.set("sources")
     from(android.sourceSets["main"].java.srcDirs)
 }
@@ -98,7 +99,7 @@ val javadocJar by tasks.creating(Jar::class) {
 artifacts {
     archives(sourcesJar)
     archives(javadocJar)
-}*/
+}
 
 dependencies {
     implementation("io.maryk.lz4:lz4-android:1.9.4")
@@ -134,12 +135,12 @@ if (secretPropsFile.exists()) {
 fun getExtraString(name: String) = ext[name]?.toString()*/
 val String.byProperty: String? get() = findProperty(this) as? String
 
-afterEvaluate {
+publishing {
     val publishTasks = mutableListOf<BundleAar>()
 
     android.libraryVariants.all { variant ->
         val name = variant.buildType.name
-        if (name != com.android.builder.core.BuilderConstants.DEBUG) {
+        if (name == com.android.builder.core.BuilderConstants.RELEASE) {
             val task = project.tasks.getByName<BundleAar>("bundle${name.uppercaseFirstChar()}Aar") {
                 dependsOn(variant.javaCompileProvider)
                 dependsOn(variant.externalNativeBuildProviders)
@@ -155,77 +156,139 @@ afterEvaluate {
         true
     }
 
-    publishing {
-        repositories {
-            maven {
-                credentials {
-                    username = "nexusUser".byProperty
-                    password = "nexusPassword".byProperty
-                }
-                setUrl("https://nexus.harbortouch.com/repository/shift4-m2/")
+    repositories {
+        maven {
+            credentials {
+                username = "nexusUser".byProperty
+                password = "nexusPassword".byProperty
             }
+            setUrl("https://nexus.harbortouch.com/repository/shift4-m2/")
         }
-        publications {
-            register<MavenPublication>("release") {
+    }
+    publications {
+        register<MavenPublication>("release") {
+            groupId = project.group as String
+            artifactId = "rocksdb-android"
+            version = project.version as String
+
+            artifact(sourcesJar)
+            artifact(javadocJar)
+            publishTasks.forEach(::artifact)
+
+            afterEvaluate {
                 from(components["release"])
-                //artifact(sourcesJar)
-                //artifact(javadocJar)
-                //publishTasks.forEach(::artifact)
-                groupId = project.group as String
-                artifactId = "rocksdb-android"
-                version = project.version as String
             }
-            /*register<MavenPublication>("RocksDB-Android").configure {
-                artifact(sourcesJar)
-                artifact(javadocJar)
-                publishTasks.forEach(::artifact)
-                groupId = project.group as String
-                artifactId = "rocksdb-android"
-                version = project.version as String
 
-                //The publication doesn't know about our dependencies, so we have to manually add them to the pom
-                pom.withXml {
-                    val dependenciesNode = asNode().appendNode("dependencies")
+            //The publication doesn't know about our dependencies, so we have to manually add them to the pom
+            /*pom.withXml {
+                val dependenciesNode = asNode().appendNode("dependencies")
 
-                    //Iterate over the compile dependencies (we don't want the test ones), adding a <dependency> node for each
-                    configurations.implementation.get().allDependencies.forEach {
-                        dependenciesNode.appendNode ("dependency").apply {
-                            appendNode("groupId", it.group)
-                            appendNode("artifactId", it.name)
-                            appendNode("version", it.version)
-                        }
+                //Iterate over the compile dependencies (we don't want the test ones), adding a <dependency> node for each
+                configurations.implementation.get().allDependencies.forEach {
+                    dependenciesNode.appendNode ("dependency").apply {
+                        appendNode("groupId", it.group)
+                        appendNode("artifactId", it.name)
+                        appendNode("version", it.version)
                     }
                 }
             }*/
         }
-
-        /*publications.withType<MavenPublication> {
-            pom {
-                name.set(project.name)
-                description.set("Android RocksDB library")
-                url.set("https://github.com/palaima/rocksdb-android")
-
-                licenses {
-                    license {
-                        name.set("The Apache Software License, Version 2.0")
-                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
-                        distribution.set("repo")
-                    }
-                }
-                developers {
-                    developer {
-                        id.set("jurmous")
-                        name.set("Jurriaan Mous")
-                    }
-                }
-                scm {
-                    url.set("https://github.com/palaima/rocksdb-android.git")
-                }
-            }
-        }*/
     }
-
-    /*signing {
-        sign(publishing.publications)
-    }*/
 }
+
+
+//afterEvaluate {
+//    val publishTasks = mutableListOf<BundleAar>()
+//
+//    android.libraryVariants.all { variant ->
+//        val name = variant.buildType.name
+//        if (name == com.android.builder.core.BuilderConstants.RELEASE) {
+//            val task = project.tasks.getByName<BundleAar>("bundle${name.uppercaseFirstChar()}Aar") {
+//                dependsOn(variant.javaCompileProvider)
+//                dependsOn(variant.externalNativeBuildProviders)
+//                from(variant.javaCompileProvider.get().destinationDirectory)
+//                from("${layout.buildDirectory.asFile.get().absolutePath}/intermediates/library_and_local_jars_jni/$name/jni") {
+//                    include("**/*.so")
+//                    into("lib")
+//                }
+//            }
+//            publishTasks.add(task)
+//            artifacts.add("archives", task)
+//        }
+//        true
+//    }
+//
+//    publishing {
+//        repositories {
+//            maven {
+//                credentials {
+//                    username = "nexusUser".byProperty
+//                    password = "nexusPassword".byProperty
+//                }
+//                setUrl("https://nexus.harbortouch.com/repository/shift4-m2/")
+//            }
+//        }
+//        publications {
+//            register<MavenPublication>("release") {
+//                from(components["release"])
+//                //artifact(sourcesJar)
+//                //artifact(javadocJar)
+//                //publishTasks.forEach(::artifact)
+//                groupId = project.group as String
+//                artifactId = "rocksdb-android"
+//                version = project.version as String
+//            }
+//            register<MavenPublication>("RocksDB-Android").configure {
+//                artifact(sourcesJar)
+//                artifact(javadocJar)
+//                publishTasks.forEach(::artifact)
+//                groupId = project.group as String
+//                artifactId = "rocksdb-android"
+//                version = project.version as String
+//
+//                //The publication doesn't know about our dependencies, so we have to manually add them to the pom
+//                pom.withXml {
+//                    val dependenciesNode = asNode().appendNode("dependencies")
+//
+//                    //Iterate over the compile dependencies (we don't want the test ones), adding a <dependency> node for each
+//                    configurations.implementation.get().allDependencies.forEach {
+//                        dependenciesNode.appendNode ("dependency").apply {
+//                            appendNode("groupId", it.group)
+//                            appendNode("artifactId", it.name)
+//                            appendNode("version", it.version)
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//
+//        /*publications.withType<MavenPublication> {
+//            pom {
+//                name.set(project.name)
+//                description.set("Android RocksDB library")
+//                url.set("https://github.com/palaima/rocksdb-android")
+//
+//                licenses {
+//                    license {
+//                        name.set("The Apache Software License, Version 2.0")
+//                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+//                        distribution.set("repo")
+//                    }
+//                }
+//                developers {
+//                    developer {
+//                        id.set("jurmous")
+//                        name.set("Jurriaan Mous")
+//                    }
+//                }
+//                scm {
+//                    url.set("https://github.com/palaima/rocksdb-android.git")
+//                }
+//            }
+//        }*/
+//    }
+//
+//    /*signing {
+//        sign(publishing.publications)
+//    }*/
+//}
